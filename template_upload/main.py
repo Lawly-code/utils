@@ -4,7 +4,7 @@ from os import getenv
 
 from dotenv import load_dotenv
 
-from template_upload.s3_docs import DocxS3Uploader, clear_proxy_environment
+from s3_docs import DocxS3Uploader, clear_proxy_environment
 
 load_dotenv()
 
