@@ -32,9 +32,11 @@ async def main():
     print(f"Доступные бакеты: {buckets}")
 
     # Загружаем все docx файлы из папки
+
     results = await uploader.upload_folder(
-        folder_path="templates",  # Укажите путь к вашей папке с docx файлами
-        prefix=""  # Опциональный префикс для имен файлов в S3
+        folder_path="images" if getenv("CONTENT_TYPE") == "image/png" else "templates",  # Укажите путь к вашей папке с docx файлами
+        prefix="",  # Опциональный префикс для имен файлов в S3
+        content_type=getenv("CONTENT_TYPE")
     )
 
     csv_filename = f"upload_results_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"

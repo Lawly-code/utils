@@ -84,12 +84,14 @@ class DocxS3Uploader:
             # Если presigned URL не работает, вернем path-style URL как наиболее совместимый
             return f"{self.endpoint_url}/{self.bucket_name}/{object_key}"
 
-    async def upload_file(self, file_path, object_name=None):
+    async def upload_file(self, file_path, object_name=None,
+                          content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document"):
         """
         Асинхронная загрузка файла на S3
 
         :param file_path: Путь к файлу для загрузки
         :param object_name: Имя объекта в S3. Если None, используется имя файла
+        :param content_type: content type объекта
         :return: Кортеж (успех, URL) где успех - True если файл успешно загружен, иначе False,
                  URL - ссылка на файл если успешно, иначе None
         """
@@ -112,7 +114,7 @@ class DocxS3Uploader:
                         Bucket=self.bucket_name,
                         Key=object_name,
                         Body=content,
-                        ContentType='application/vnd.openxmlformats-officedocument.wordprocessingml.document'
+                        ContentType=content_type
                     )
             self.logger.info(f"Файл {file_path} успешно загружен как {object_name}")
 
@@ -212,12 +214,13 @@ class DocxS3Uploader:
             self.logger.error(f"Ошибка при получении списка бакетов: {e}")
             return []
 
-    async def upload_folder(self, folder_path, prefix=""):
+    async def upload_folder(self, folder_path, prefix="", content_type=None):
         """
         Асинхронно загружает все DOCX файлы из указанной папки на S3
 
         :param folder_path: Путь к папке с DOCX файлами
         :param prefix: Префикс для имен объектов в S3
+        :param content_type: content type объекта
         :return: Словарь с результатами загрузки {имя_файла: (результат, ссылка)}
         """
         # Сначала проверим сервис - запросим список бакетов
@@ -238,17 +241,17 @@ class DocxS3Uploader:
             self.logger.error(f"Папка {folder_path} не существует или не является директорией")
             return {}
 
-        docx_files = list(folder.glob("**/*.docx"))
-        if not docx_files:
-            self.logger.warning(f"В папке {folder_path} не найдено DOCX файлов")
+        files = list(folder.glob("**/*.png") if "png" in content_type else folder.glob("**/*.docx"))
+        if not files:
+            self.logger.warning(f"В папке {folder_path} не найдено нужных файлов")
             return {}
 
-        self.logger.info(f"Найдено {len(docx_files)} DOCX файлов для загрузки")
+        self.logger.info(f"Найдено {len(files)} DOCX файлов для загрузки")
 
         tasks = []
         file_object_names = {}  # Словарь для хранения соответствия файлов и их ключей в S3
 
-        for file_path in docx_files:
+        for file_path in files:
             # Создаем имя объекта в S3 с учетом префикса и относительного пути
             relative_path = file_path.relative_to(folder)
             object_name = f"{prefix}{relative_path}" if prefix else str(relative_path)
@@ -260,14 +263,14 @@ class DocxS3Uploader:
             file_object_names[str(file_path)] = object_name
 
             # Добавляем задачу на загрузку файла
-            tasks.append(self.upload_file(str(file_path), object_name))
+            tasks.append(self.upload_file(str(file_path), object_name, content_type))
 
         # Выполняем все задачи конкурентно
         results = await asyncio.gather(*tasks, return_exceptions=True)
 
         # Формируем словарь результатов
         upload_results = {}
-        for file_path, result in zip(docx_files, results):
+        for file_path, result in zip(files, results):
             str_path = str(file_path)
             if isinstance(result, Exception):
                 self.logger.error(f"Исключение при загрузке {file_path}: {result}")
